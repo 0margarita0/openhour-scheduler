@@ -1138,3 +1138,6 @@ form label {
         transition-duration: .01ms !important;
     }
 }
+.slot-actions { display: flex; align-items: center; gap: 10px; }
+.delete-button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #f1c9cd; background: #fff; color: #b3363f; padding: 6px 12px; border-radius: 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.delete-button:hover { background: #fdecee; }

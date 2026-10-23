@@ -71,6 +71,13 @@ app.post("/api/slots/:id/book", (req, res) => {
     res.json({ ok: true });
 });
 
+// Delete a slot (host).
+app.delete("/api/slots/:id", (req, res) => {
+    const info = db.prepare("DELETE FROM slots WHERE id = ?").run(req.params.id);
+    if (info.changes === 0) return res.status(404).json({ error: "Slot not found." });
+    res.json({ ok: true });
+});
+
 // In production, the same server also serves the built React app.
 const dist = path.join(process.cwd(), "dist");
 app.use(express.static(dist));

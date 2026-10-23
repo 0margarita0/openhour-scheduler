@@ -61,6 +61,7 @@ const paths: Record<string, ReactNode> = {
     mail: (<><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m4 7 8 6 8-6" /></>),
     chevron: <path d="m9 18 6-6-6-6" />,
     close: <path d="m7 7 10 10M17 7 7 17" />,
+    trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
 };
 
 function Icon({ name, size = 18 }: { name: keyof typeof paths; size?: number }) {
@@ -291,6 +292,15 @@ function HostPage({ slots, onAdded }: { slots: Slot[]; onAdded: () => void }) {
         onAdded();
     };
 
+    const deleteSlot = async (slot: Slot) => {
+        const message =
+            slot.status === "booked"
+                ? `This slot is booked by ${slot.guest?.name}. Delete it anyway?`
+                : "Delete this slot?";
+        if (!window.confirm(message)) return;
+        await fetch(`/api/slots/${slot.id}`, { method: "DELETE" });
+        onAdded();
+    };
     const ordered = [...slots].sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`));
     const availableCount = slots.filter((s) => s.status === "available").length;
     const bookedCount = slots.filter((s) => s.status === "booked").length;
@@ -352,7 +362,7 @@ function HostPage({ slots, onAdded }: { slots: Slot[]; onAdded: () => void }) {
                         <span className="live-pill"><i /> Live</span>
                     </div>
                     <div className="host-slots">
-                        {ordered.map((s) => <HostSlot slot={s} key={s.id} />)}
+                        {ordered.map((s) => <HostSlot slot={s} key={s.id} onDelete={() => deleteSlot(s)} />)}
                     </div>
                 </section>
             </div>
@@ -360,7 +370,7 @@ function HostPage({ slots, onAdded }: { slots: Slot[]; onAdded: () => void }) {
     );
 }
 
-function HostSlot({ slot }: { slot: Slot }) {
+function HostSlot({ slot, onDelete }: { slot: Slot; onDelete: () => void }) {
     const parts = monthDay(slot.date);
     return (
         <article className={`host-slot ${slot.status}`}>
@@ -377,7 +387,12 @@ function HostSlot({ slot }: { slot: Slot }) {
                     </div>
                 )}
             </div>
-            <span className={`status-pill ${slot.status}`}><i /> {slot.status === "available" ? "Available" : "Booked"}</span>
+            <div className="slot-actions">
+                <span className={`status-pill ${slot.status}`}><i /> {slot.status === "available" ? "Available" : "Booked"}</span>
+                <button className="delete-button" type="button" onClick={onDelete} aria-label="Delete slot">
+                    <Icon name="trash" size={15} /> Delete
+                </button>
+            </div>
         </article>
     );
 }
