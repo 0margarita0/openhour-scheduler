@@ -1,87 +1,166 @@
+
 import express from "express";
-import Database from "better-sqlite3";
+import pg from "pg";
 import path from "node:path";
 
-const db = new Database("data.db");
+const { Pool } = pg;
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS slots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    start TEXT NOT NULL,
-    duration INTEGER NOT NULL,
-    guest_name TEXT,
-    guest_email TEXT,
-    booked_at TEXT
-  )
-`);
+if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is not configured.");
+}
+
+const db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+});
+
 const app = express();
 app.use(express.json());
 
-app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
+app.get("/api/health", async (_req, res) => {
+    try {
+        await db.query("SELECT 1");
+        res.json({ ok: true });
+    } catch (error) {
+        console.error("Database health check failed:", error);
+        res.status(500).json({ error: "Database connection failed." });
+    }
 });
-// Public list: guests only see IF a slot is booked, never who booked it.
-app.get("/api/slots", (_req, res) => {
-    const slots = db
-        .prepare("SELECT id, start, duration, guest_email IS NOT NULL AS booked FROM slots ORDER BY start")
-        .all();
-    res.json(slots);
+
+// Public list: guests see whether a slot is booked, not who booked it.
+app.get("/api/slots", async (_req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT id, start, duration, (guest_email IS NOT NULL) AS booked
+            FROM slots
+            ORDER BY start
+        `);
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Could not list slots:", error);
+        res.status(500).json({ error: "Could not load slots." });
+    }
 });
 
 // Host list: includes guest name and email.
-app.get("/api/host/slots", (_req, res) => {
-    const slots = db
-        .prepare("SELECT *, guest_email IS NOT NULL AS booked FROM slots ORDER BY start")
-        .all();
-    res.json(slots);
+app.get("/api/host/slots", async (_req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT *, (guest_email IS NOT NULL) AS booked
+            FROM slots
+            ORDER BY start
+        `);
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Could not list host slots:", error);
+        res.status(500).json({ error: "Could not load host slots." });
+    }
 });
 
 // Create a slot.
-app.post("/api/slots", (req, res) => {
+app.post("/api/slots", async (req, res) => {
     const { date, time, duration } = req.body ?? {};
     const start = `${date}T${time}`;
     const valid = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start);
+
     if (!valid || ![15, 30, 45, 60].includes(Number(duration))) {
-        return res.status(400).json({ error: "Please enter a valid date, time and duration." });
+        return res.status(400).json({
+            error: "Please enter a valid date, time and duration.",
+        });
     }
-    const info = db
-        .prepare("INSERT INTO slots (start, duration) VALUES (?, ?)")
-        .run(start, Number(duration));
-    res.status(201).json({ id: info.lastInsertRowid });
+
+    try {
+        const result = await db.query(
+            "INSERT INTO slots (start, duration) VALUES ($1, $2) RETURNING id",
+            [start, Number(duration)]
+        );
+        res.status(201).json({ id: result.rows[0].id });
+    } catch (error) {
+        console.error("Could not create slot:", error);
+        res.status(500).json({ error: "Could not create slot." });
+    }
 });
 
-// Book a slot.
-app.post("/api/slots/:id/book", (req, res) => {
+// Book a slot. Only an unbooked slot can be updated.
+app.post("/api/slots/:id/book", async (req, res) => {
     const name = String(req.body?.name ?? "").trim();
     const email = String(req.body?.email ?? "").trim();
 
     if (!name || !/^\S+@\S+\.\S+$/.test(email)) {
-        return res.status(400).json({ error: "Please enter your name and a valid email." });
+        return res.status(400).json({
+            error: "Please enter your name and a valid email.",
+        });
     }
 
-    const info = db
-        .prepare(
-            "UPDATE slots SET guest_name = ?, guest_email = ?, booked_at = ? WHERE id = ? AND guest_email IS NULL"
-        )
-        .run(name, email, new Date().toISOString(), req.params.id);
+    try {
+        const result = await db.query(
+            `UPDATE slots
+             SET guest_name = $1, guest_email = $2, booked_at = $3
+             WHERE id = $4 AND guest_email IS NULL`,
+            [name, email, new Date().toISOString(), req.params.id]
+        );
 
-    if (info.changes === 0) {
-        return res.status(409).json({ error: "This slot was just booked by someone else." });
+        if (result.rowCount === 0) {
+            return res.status(409).json({
+                error: "This slot was just booked by someone else.",
+            });
+        }
+
+        res.json({ ok: true });
+    } catch (error) {
+        console.error("Could not book slot:", error);
+        res.status(500).json({ error: "Could not book slot." });
     }
-    res.json({ ok: true });
 });
 
-// Delete a slot (host).
-app.delete("/api/slots/:id", (req, res) => {
-    const info = db.prepare("DELETE FROM slots WHERE id = ?").run(req.params.id);
-    if (info.changes === 0) return res.status(404).json({ error: "Slot not found." });
-    res.json({ ok: true });
+// Delete a slot.
+app.delete("/api/slots/:id", async (req, res) => {
+    try {
+        const result = await db.query(
+            "DELETE FROM slots WHERE id = $1",
+            [req.params.id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Slot not found." });
+        }
+
+        res.json({ ok: true });
+    } catch (error) {
+        console.error("Could not delete slot:", error);
+        res.status(500).json({ error: "Could not delete slot." });
+    }
 });
 
-// In production, the same server also serves the built React app.
+// Serve the built React app in production.
 const dist = path.join(process.cwd(), "dist");
 app.use(express.static(dist));
-app.use((_req, res) => res.sendFile(path.join(dist, "index.html")));
+app.use((_req, res) => {
+    res.sendFile(path.join(dist, "index.html"));
+});
 
 const port = Number(process.env.PORT ?? 3001);
-app.listen(port, () => console.log(`API on http://localhost:${port}`));
+
+async function startServer() {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS slots (
+                id SERIAL PRIMARY KEY,
+                start TEXT NOT NULL,
+                duration INTEGER NOT NULL,
+                guest_name TEXT,
+                guest_email TEXT,
+                booked_at TEXT
+            )
+        `);
+
+        app.listen(port, () => {
+            console.log(`API listening on port ${port}`);
+        });
+    } catch (error) {
+        console.error("Failed to initialize PostgreSQL:", error);
+        process.exit(1);
+    }
+}
+
+startServer();
