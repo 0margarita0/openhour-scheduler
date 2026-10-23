@@ -109,8 +109,8 @@ export default function App() {
                     </button>
                 </nav>
                 <div className="host-chip">
-                    <span className="avatar">MC</span>
-                    <span className="host-name">Maya Chen</span>
+                    <span className="avatar">MD</span>
+                    <span className="host-name">Margarita Dimitrijeska</span>
                 </div>
             </header>
 
@@ -187,10 +187,10 @@ function BookingPage({
         <main className="booking-main">
             <section className="booking-hero">
                 <div className="host-profile">
-                    <span className="large-avatar">MC</span>
+                    <span className="large-avatar">MD</span>
                     <div>
                         <span className="profile-label">Book time with</span>
-                        <span className="profile-name">Maya Chen</span>
+                        <span className="profile-name">Margarita Dimitrijeska</span>
                     </div>
                 </div>
                 <div className="page-intro">
@@ -458,7 +458,7 @@ function ConfirmationModal({ slot, close }: { slot: Slot; close: () => void }) {
                 <div className="success-mark"><Icon name="check" size={30} /></div>
                 <span className="eyebrow">You’re all set</span>
                 <h2 id="confirmation-title">Booking confirmed!</h2>
-                <p>Thanks, {slot.guest?.name.split(" ")[0]}! Your {slot.duration}-minute session with Maya is confirmed.</p>
+                <p>Thanks, {slot.guest?.name.split(" ")[0]}! Your {slot.duration}-minute session with Margarita  is confirmed.</p>
                 <div className="confirmation-details">
                     <div><Icon name="calendar" /><span><small>Date</small><strong>{longDate(slot.date)}</strong></span></div>
                     <div><Icon name="clock" /><span><small>Time</small><strong>{formatTime(slot.time)} · {slot.duration} minutes</strong></span></div>
