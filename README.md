@@ -2,7 +2,6 @@
 
 A small scheduling app. A host publishes available time slots, and guests book one with their name and email. A booked slot is no longer available, so there are no double bookings. No login is needed (single host).
 
-Built for the TeamLift Product Engineer Internship challenge.
 
 **Live app:** https://openhour-scheduler.onrender.com/
 
