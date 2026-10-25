@@ -2,6 +2,7 @@
 
 A small scheduling app. A host publishes available time slots, and guests book one with their name and email. A booked slot is no longer available, so there are no double bookings. No login is needed (single host).
 
+Built for the TeamLift Product Engineer Internship challenge.
 
 **Live app:** https://openhour-scheduler.onrender.com/
 
@@ -10,21 +11,39 @@ A small scheduling app. A host publishes available time slots, and guests book o
 ## What I built
 
 - **Booking page:** guests see upcoming open slots grouped by day and book one through a short form (name and email). Booked slots are hidden, with a "Show booked" toggle. Empty, loading, validation and "just booked by someone else" states are handled.
-- **Host view:** add a slot (date, start time, duration), see all slots with their status, and see who booked each one.
-- **Backend:** Node + Express API with a SQLite database, so data persists between restarts on a normal machine.
+- **Host view:** add a slot (date, start time, duration), see all slots with their status, see who booked each one, and delete a slot.
+- **Backend:** Node + Express API with a PostgreSQL database (hosted on Neon), so data persists between restarts and redeploys.
 - **No double bookings:** booking is a single atomic SQL `UPDATE ... WHERE guest_email IS NULL`. If two people click at the same time, only one succeeds and the other gets a clear error and a refreshed list.
+- **No overlapping slots:** the host cannot publish a slot that overlaps an existing one.
 - **Privacy:** the public API only says whether a slot is booked. Guest names and emails are only returned to the host view.
 
 **Design:** prototyped in Figma Make, then I built the React UI and connected it to the backend step by step.
 
-**Stack:** React, TypeScript, Vite, Tailwind CSS, Express, better-sqlite3.
+**Stack:** React, TypeScript, Vite, Tailwind CSS, Express, PostgreSQL (`pg`).
 
 ## Run it locally
 
-Requires Node.js 18+.
+Requires Node.js 18+ and a PostgreSQL database. A free one from [Neon](https://neon.tech) works well.
+
+1. Install dependencies:
 
 ```bash
 npm install
+```
+
+2. Set the `DATABASE_URL` environment variable to your PostgreSQL connection string. The table is created automatically on startup.
+
+```bash
+# macOS / Linux
+export DATABASE_URL="postgresql://user:password@host/dbname?sslmode=require"
+
+# Windows PowerShell
+$env:DATABASE_URL="postgresql://user:password@host/dbname?sslmode=require"
+```
+
+3. Start the app:
+
+```bash
 npm run dev
 ```
 
@@ -43,8 +62,9 @@ npm start      # http://localhost:3001
 |---|---|---|
 | GET | `/api/slots` | Public list of slots (no guest details) |
 | GET | `/api/host/slots` | Host list, including guest name and email |
-| POST | `/api/slots` | Create a slot: `{ date, time, duration }` |
+| POST | `/api/slots` | Create a slot: `{ date, time, duration }`. Returns 409 if it overlaps an existing slot |
 | POST | `/api/slots/:id/book` | Book a slot: `{ name, email }`. Returns 409 if it is already booked |
+| DELETE | `/api/slots/:id` | Delete a slot |
 
 ## AI tools I used
 
@@ -53,8 +73,7 @@ npm start      # http://localhost:3001
 
 ## What I would improve with more time
 
-- Use PostgreSQL (for example on Neon). On the free hosting tier the SQLite file is reset when the service restarts, so booked data does not last there.
-- Host authentication, so only the host can publish slots, plus deleting and editing slots.
+- Host authentication, so only the host can publish and delete slots (right now the app has no login, as the brief says).
 - Time zone support and a real confirmation email to the guest (the confirmation screen currently only confirms that the booking is saved).
 - An AI-written confirmation message (for example with Gemini) and a Google Calendar check for clashing events.
-- Automated tests for the booking logic.
+- Make the overlap check atomic in the database (for example with an exclusion constraint), and add automated tests for the booking logic.
